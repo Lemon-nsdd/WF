@@ -24,11 +24,12 @@ void GetFilesName(string path,vector<string>& files,char flag)
     intptr_t  hFile = 0;
     struct _finddata_t fileinfo;
     string p;
-    if ((hFile = _findfirst(p.assign(path).append("/*").c_str(), &fileinfo)) != -1)
-    {
+    hFile = _findfirst(p.assign(path).append("/*").c_str(), &fileinfo);
+    if (hFile != -1){
     	if(flag == 'd'){
     		do{
-    			cout<<fileinfo.name<<endl;
+    			if((!strcmp(fileinfo.name,"."))||(!strcmp(fileinfo.name,"..")))
+    				continue;
     			files.push_back(p.assign(path).append("/").append(fileinfo.name));
 			}while (_findnext(hFile, &fileinfo) == 0);
 		}
@@ -40,71 +41,51 @@ void GetFilesName(string path,vector<string>& files,char flag)
 	            }
 	            else
 	            {
+	            	if((!strcmp(fileinfo.name,"."))||(!strcmp(fileinfo.name,"..")))
+    					continue;
 	                files.push_back(p.assign(path).append("/").append(fileinfo.name));
 	            }
         	} while (_findnext(hFile, &fileinfo) == 0);
 		}
         _findclose(hFile);
     }
+	else{
+		cout<<"目录不存在"<<endl; 
+	}
 }
 
 /*根据命令行参数获取文件名*/ 
-vector<string> findfile(int argc,char *argv[]){
-	vector<string> filename;
-	string rel;
-	if(!strcmp(argv[1],"-c")||!strcmp(argv[1],"-f")){
-		rel="data/";
-		if(!strcmp(argv[argc-2],"-n")){
-			for(int i=2;i<argc-2;i++){
-			rel = rel + argv[i] + " ";
+map<string,string> findfile(int argc,char *argv[]){
+	map<string,string> arg;
+	string temp;
+	for(int i=1;i<argc;){
+		int j = i+1;
+		temp = "";
+		if(argv[i][0] == '-'){
+			for( ;(argv[j][0]!='-')&&(j<argc-1);j++){
+				temp = temp + argv[j] + " ";
+			}
+			if(j==(argc-1))
+				temp = temp + argv[j];
+			temp.erase(temp.find_last_not_of(" ") + 1);;
+			arg.insert(pair<string,string>(argv[i],temp));
 		}
-		}
-		else{
-			for(int i=2;i<argc;i++){
-			rel = rel + argv[i] + " ";
-		}
-		}
-		filename.push_back(rel);
+		i = j;
 	}
-	else if(!strcmp(argv[1],"-d")){
-		char flag;
-		if(!strcmp(argv[2],"-s")){
-			rel = argv[3];
-			flag = 's';
-		}
-		else{
-			rel = argv[2];
-			cout<<rel<<endl;
-		}
-		GetFilesName(rel,filename,flag);
-	}
-	else if(!strcmp(argv[1],"-x")){
-		rel = argv[2];
-		filename.push_back(rel);
-		rel = "data/" ;
-		for(int i=4;i<argc;i++){
-			rel = rel + argv[i] + " ";
-		}
-		filename.push_back(rel);
-	}
-	else if(!strcmp(argv[1],"-p")){
-		rel = "data/" ;
-		for(int i=4;i<argc;i++){
-			rel = rel + argv[i] + " ";
-		}
-		filename.push_back(rel);
-	}
-	else;
-	return filename;
+	return arg;
 }
 
 /*计算file文件中字母出现的频率*/
-void alpFrequent(string file){
+void alpFrequent(map<string,string> arg){
+	string file;
 	FILE *fp;
 	int results[26];
 	vector<pair<char,float> > vec;
 	int sum=0;
 	float percent;
+	map<string,string>::iterator it;
+	it = arg.find("-c");
+	file = it->second;
 	try{
 			fp = fopen(file.c_str(),"r") ;
 			if(fp == NULL)
@@ -182,65 +163,113 @@ vector<string> split(string line,int number){
 }
 
 /*计算不同单词的出现频率*/ 
-void wordsFrequent(string file,int n,string stopfile,int number){
-	map<string,int> count;
+void wordsFrequent(map<string,string> arg){
+	map<string,int> counts;
 	string line;
 	vector<string> stopwords;
 	vector<string> words;
+	vector<string> verbs; 
 	ifstream in;
 	ifstream stop;
+	ifstream verb;
+	
+	/*处理map中的参数*/
+	map<string,string>::iterator file;
+	file = arg.find("-f");
+	
+	map<string,string>::iterator stopfile;
+	stopfile = arg.find("-x");
+	
+	map<string,string>::iterator verbfile;
+	verbfile = arg.find("-v");
+	
+	map<string,string>::iterator length;
+	int leng=1;
+	length = arg.find("-p");
+	if(length!=arg.end())
+		leng = abs(atoi((length->second).c_str()));
+		
+	map<string,string>::iterator number;
+	int n=0;
+	number = arg.find("-n");
+	if(number!=arg.end())
+		n = abs(atoi((number->second).c_str()));
+			
 	try{
-			if(!stopfile.empty()){
-				stop.open(stopfile.c_str());
+			if(stopfile!=arg.end()){
+				stop.open((stopfile->second).c_str());
 				if(!stop.is_open()){
 					cout<<"停词文件不存在"<<endl;
 					return; 
 				}
 				while(getline(stop,line)){
-					vector<string> stopword = split(line,1);
-					stopwords.insert(stopwords.end(),stopword.begin(),stopword.end());
+					vector<string> tempstop = split(line,1);
+					stopwords.insert(stopwords.end(),tempstop.begin(),tempstop.end());
 				}
 			}
-			in.open(file.c_str());
+			in.open((file->second).c_str());
 			if(!in.is_open())
 				cout<<"文件不存在"<<endl;
 			else{
 					while(getline(in,line)){
-						words=split(line,number);
+						words=split(line,leng);
 						for(vector<string>::iterator it=words.begin();it!=words.end();++it ){
-							if(!stopfile.empty()){
+							if(stopfile!=arg.end()){
 								for(vector<string>::iterator stopIt=stopwords.begin();stopIt!=stopwords.end();stopIt++){
 									if (*it==*stopIt){
 										break;
 									}
 									else{
 										if(stopIt==(stopwords.end()-1)){
-											count[*it]++;
+											counts[*it]++;
 										}
 									}
 								}
 							}
 							else
-								count[*it]++;
+								counts[*it]++;
+						}
+					}
+			}
+			if(verbfile != arg.end()){
+				verb.open((verbfile->second).c_str());
+				if(!verb.is_open()){
+					cout<<"动词变形文件不存在"<<endl;
+					return; 
+				}
+				while(getline(verb,line)){
+					vector<string> tempverb = split(line,1);
+					verbs.insert(verbs.end(),tempverb.begin(),tempverb.end());
+				}
+				int sum = verbs.size()/4;
+				map<string,int>::iterator findverb;
+				for(int i=1;i<4;i++){
+					for(int j=0;j<sum;j++){
+						findverb = counts.find(verbs[4*j+1]);
+						if(findverb!= counts.end()){
+							if(verbs[4*j]!=verbs[4*j+1]){
+								counts[verbs[4*j]] += findverb->second;
+								counts.erase(findverb);
+							}
 						}
 					}
 				}
-				vector<pair<string,int> > results;
-				copy(count.begin(), count.end(), back_inserter(results));
-				sort(results.begin(),results.end(),cmp1);
-				cout<<file<<"中单词的使用次数："<<endl;
-				if(!n){
-					for(int i=0;i<results.size();i++){
-					cout<<results[i].first<<":"<<results[i].second<<"次"<<endl;
-				}
-				}
-				else{
-					for(int i=0;i<n;i++){
-					cout<<results[i].first<<":"<<results[i].second<<"次"<<endl;
-				}
+			}
+			vector<pair<string,int> > results;
+			copy(counts.begin(), counts.end(), back_inserter(results));
+			sort(results.begin(),results.end(),cmp1);
+			cout<<file->second<<"中单词的使用次数："<<endl;
+			if(!n){
+				for(int i=0;i<results.size();i++){
+				cout<<results[i].first<<":"<<results[i].second<<"次"<<endl;
+			}
+			}
+			else{
+				for(int i=0;i<n;i++){
+				cout<<results[i].first<<":"<<results[i].second<<"次"<<endl;
 				}
 			}
-		
+		}
 	catch(char *e){
 		cout<<e<<endl;
 	}
@@ -248,51 +277,49 @@ void wordsFrequent(string file,int n,string stopfile,int number){
 }
 
 int main(int argc,char *argv[]) {
-	vector<string> file;
+	map<string,string> arg;
 	string filename;
 	string stop;
 	int n=0;
-	int number=1;	
+	int number=1;
+	vector<string> files;
+	map<string,string>::iterator it;	
 	if(argc >= 3){
-		file = findfile(argc,argv);	
-		if(!strcmp(argv[1],"-c")){
-			for(vector<string>::iterator it=file.begin();it!=file.end();it++)
-				alpFrequent(*it);	
+		arg = findfile(argc,argv);	
+		if(arg.find("-c")!=arg.end()){
+				
+				alpFrequent(arg);	
 		}
-		else if(!strcmp(argv[1],"-f")){
-			cout<<"-f"<<endl;
-			if(!strcmp(argv[argc-2],"-n")){
-				n = abs(atoi(argv[argc-1]));
+		else if(arg.find("-f")!=arg.end()){
+			wordsFrequent(arg);
+		}
+		else if(arg.find("-d")!=arg.end()){
+			it = arg.find("-d");
+			string root=it->second;
+			GetFilesName(root,files,'d');
+			for(vector<string>::iterator it=files.begin();it!=files.end();it++){
+				arg["-f"] = (*it);
+				wordsFrequent(arg);
 			}
-			filename = file[0];
-			cout<<filename<<endl;
-			wordsFrequent(filename,n,stop,number);
 		}
-		else if(!strcmp(argv[1],"-d")){
-			if(!strcmp(argv[argc-2],"-n")){
-				n = abs(atoi(argv[argc-1]));
+		else if(arg.find("-s")!=arg.end()){
+			it = arg.find("-s");
+			string root=it->second;
+			GetFilesName(root,files,'s');
+			for(vector<string>::iterator it=files.begin();it!=files.end();it++){
+				arg["-f"] = (*it);
+				wordsFrequent(arg);
 			}
-			for(vector<string>::iterator it=file.begin();it!=file.end();it++)
-				wordsFrequent(*it,n,stop,number);
-		}
-		else if(!strcmp(argv[1],"-x")){
-			filename =file[1];
-			stop = file[0],
-			wordsFrequent(filename,n,stop,number);
-		}
-		else if(!strcmp(argv[1],"-p")){
-			number = atoi(argv[2]);
-			filename = file[0];
-			wordsFrequent(filename,n,stop,number);
 		}
 		else{
 		cout<<"可选的命令格式为： "<<endl; 
-		cout<<"Wf.exe -c <file name> "<<endl;
-		cout<<"Wf.exe -f <file name> (-n -num)"<<endl;
-		cout<<"Wf.exe -d <directory> (-n -num)"<<endl;
-		cout<<"Wf.exe -d -s <directory> (-n -num)"<<endl;
-		cout<<"Wf.exe -x <stopfile> -f <filename>"<<endl;
-		cout<<"Wf.exe -p number -f <filename>"<<endl;
+		cout<<"-c:计算文件字母使用频率 "<<endl;
+		cout<<"-f:计算文件单词使用次数 "<<endl;
+		cout<<"-d(-s):计算目录(子目录)文件下单词使用次数 "<<endl;
+		cout<<"-n:使用次数最多的n个单词 "<<endl;
+		cout<<"-p:p个单词组成的短语的使用次数 "<<endl;
+		cout<<"-s:出去停词文件中的单词，其他单词的使用次数 "<<endl;
+		cout<<"-v:将动词都合并为原型计算次数 "<<endl;
 	}
 	}
 	else{
